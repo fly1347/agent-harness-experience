@@ -1,0 +1,170 @@
+{
+  "scenario_id": "multi_turn_context_v1",
+  "description": "Fixed multi-turn scenario for Agent Harness context, memory, and restart experiments.",
+  "restart_after_turn": "T08",
+  "turns": [
+    {
+      "turn_id": "T01",
+      "user_input": "读取 01。检索层和证据层最核心的区别是什么？",
+      "expected_contains": [
+        "检索",
+        "证据",
+        "候选",
+        "支撑"
+      ],
+      "expected_tool": {
+        "name": "read_document",
+        "document": "01-检索层与证据层评估.md"
+      },
+      "expected_memory_action": null,
+      "notes": "First native tool call; establishes early conversation facts."
+    },
+    {
+      "turn_id": "T02",
+      "user_input": "读取 02。生成层和引用层分别负责什么？它们和上一篇处在 RAG 链路的什么位置？",
+      "expected_contains": [
+        "生成",
+        "引用",
+        "答案",
+        "来源"
+      ],
+      "expected_tool": {
+        "name": "read_document",
+        "document": "02-生成层与引用层评估.md"
+      },
+      "expected_memory_action": null,
+      "notes": "Second document read; establishes relationship between fixture 01 and 02."
+    },
+    {
+      "turn_id": "T03",
+      "user_input": "第二篇和第一篇相比，评估对象发生了什么变化？",
+      "expected_contains": [
+        "检索",
+        "证据",
+        "生成",
+        "引用"
+      ],
+      "expected_tool": null,
+      "expected_memory_action": null,
+      "notes": "Tests multi-turn reference without forcing another document read."
+    },
+    {
+      "turn_id": "T04",
+      "user_input": "记住：本次实验当前重点是“评估对象分层”和“指标边界”。",
+      "expected_contains": [
+        "评估对象分层",
+        "指标边界"
+      ],
+      "expected_tool": null,
+      "expected_memory_action": {
+        "action": "write",
+        "key": "experiment_focus",
+        "value": [
+          "评估对象分层",
+          "指标边界"
+        ]
+      },
+      "notes": "First long-term memory write."
+    },
+    {
+      "turn_id": "T05",
+      "user_input": "读取 04。Faithfulness 和 Answer Relevancy 分别在评什么？",
+      "expected_contains": [
+        "Faithfulness",
+        "Answer Relevancy"
+      ],
+      "expected_tool": {
+        "name": "read_document",
+        "document": "04-评估工具与RAGAS指标拆解.md"
+      },
+      "expected_memory_action": null,
+      "notes": "Adds RAGAS metric concepts and grows conversation context."
+    },
+    {
+      "turn_id": "T06",
+      "user_input": "读取 03。为什么实验设计强调一次尽量只改一个主要变量？",
+      "expected_contains": [
+        "变量",
+        "归因",
+        "比较"
+      ],
+      "expected_tool": {
+        "name": "read_document",
+        "document": "03-实验变量与回归集设计.md"
+      },
+      "expected_memory_action": null,
+      "notes": "Independent topic inserted mid-conversation to increase context pressure."
+    },
+    {
+      "turn_id": "T07",
+      "user_input": "把实验重点更新为“Context Management”和“评估信度”。",
+      "expected_contains": [
+        "Context Management",
+        "评估信度"
+      ],
+      "expected_tool": null,
+      "expected_memory_action": {
+        "action": "supersede",
+        "key": "experiment_focus",
+        "value": [
+          "Context Management",
+          "评估信度"
+        ]
+      },
+      "notes": "Old experiment_focus must become superseded; new value becomes active."
+    },
+    {
+      "turn_id": "T08",
+      "user_input": "读取 05。为什么 faithfulness 高不能单独证明答案完整？",
+      "expected_contains": [
+        "faithfulness",
+        "完整"
+      ],
+      "expected_tool": {
+        "name": "read_document",
+        "document": "05-评估信度与阶段映射.md"
+      },
+      "expected_memory_action": null,
+      "notes": "Last turn before a real runtime restart."
+    },
+    {
+      "turn_id": "T09",
+      "user_input": "当前实验重点是什么？",
+      "expected_contains": [
+        "Context Management",
+        "评估信度"
+      ],
+      "expected_tool": null,
+      "expected_memory_action": {
+        "action": "read",
+        "key": "experiment_focus"
+      },
+      "notes": "Tests active long-term memory recall after restart."
+    },
+    {
+      "turn_id": "T10",
+      "user_input": "最早读的 01 和 02 分别评估 RAG 链路的哪些阶段？",
+      "expected_contains": [
+        "检索",
+        "证据",
+        "生成",
+        "引用"
+      ],
+      "expected_tool": null,
+      "expected_memory_action": null,
+      "notes": "Key context-strategy comparison turn: early conversation information after restart."
+    }
+  ],
+  "optional_extension": {
+    "turn_id": "TX1",
+    "user_input": "读取 06。它对 Context Precision 的具体描述，与之前 04 的体系级解释是什么关系？",
+    "expected_contains": [
+      "Context Precision"
+    ],
+    "expected_tool": {
+      "name": "read_document",
+      "document": "06-ragas-metrics.md"
+    },
+    "notes": "Use only if the three context strategies need additional pressure."
+  }
+}

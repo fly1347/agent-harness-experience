@@ -1,0 +1,18 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+*.zip
+*:Zone.Identifier
+
+# Runtime outputs are generated locally and are not part of the public source tree.
+artifacts/*
+!artifacts/examples/
+!artifacts/examples/**
