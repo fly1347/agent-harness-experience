@@ -21,8 +21,8 @@ from mini_agent_harness.storage.sqlite_store import SQLiteStore
 
 
 class SQLiteStoreTests(unittest.TestCase):
-    # 数据库关闭再打开后，应恢复同一 Session 的完整消息顺序和内容。
     def test_session_survives_close_and_reopen(self) -> None:
+        """数据库关闭再打开后，应恢复同一 Session 的完整消息顺序和内容。"""
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "harness.db"
 
@@ -103,10 +103,10 @@ class SQLiteStoreTests(unittest.TestCase):
                 expected_updated_at,
             )
 
-    # 同一 Session 再次保存时，应更新为最新消息快照而不是重复追加。
     def test_resaving_session_replaces_message_snapshot(
         self,
     ) -> None:
+        """同一 Session 再次保存时，应更新为最新消息快照而不是重复追加。"""
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "harness.db"
 
@@ -147,10 +147,10 @@ class SQLiteStoreTests(unittest.TestCase):
                 ],
             )
 
-    # Memory 的多版本状态在重开数据库后应保持不变。
     def test_memory_lifecycle_survives_close_and_reopen(
         self,
     ) -> None:
+        """Memory 的多版本状态在重开数据库后应保持不变。"""
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "harness.db"
 
@@ -223,10 +223,10 @@ class SQLiteStoreTests(unittest.TestCase):
                 ],
             )
 
-    # 读取不存在的 session_id 时应明确返回 None。
     def test_missing_session_returns_none(
         self,
     ) -> None:
+        """读取不存在的 session_id 时应明确返回 None。"""
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "harness.db"
 

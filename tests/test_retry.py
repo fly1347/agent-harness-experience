@@ -144,8 +144,8 @@ class _Tracer:
 
 
 class ToolRetryTests(unittest.TestCase):
-    # 未显式启用 retry 时，保留旧的“错误写回模型再自行恢复”行为。
     def test_default_mode_preserves_step1_to_step9_error_writeback(self) -> None:
+        """未显式启用 retry 时，保留旧的“错误写回模型再自行恢复”行为。"""
         provider = _Provider()
         tools = _AlwaysFailTools()
         tracer = _Tracer()

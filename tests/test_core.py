@@ -206,8 +206,8 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertEqual(built.messages[1]["role"], "system")
         self.assertIn("Conversation summary", built.messages[1]["content"])
 
-    # 历史摘要与当前记忆冲突时，请求中应明确标出 Active Memory 的当前状态优先级。
     def test_managed_context_marks_active_memory_as_current_authority(self) -> None:
+        """历史摘要与当前记忆冲突时，请求中应明确标出 Active Memory 的当前状态优先级。"""
         from mini_agent_harness.core.context import ContextBuilder
 
         history = [
