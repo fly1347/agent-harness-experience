@@ -29,8 +29,8 @@ from mini_agent_harness.core.session import Session
 class SQLiteStore:
     """把 Session 与 Memory 的当前状态保存到一个本地 SQLite 数据库文件。"""
 
+    # 打开数据库文件；母目录不存在时自动创建，并确保基础表已经存在。
     def __init__(self, db_path: str | Path) -> None:
-        """打开数据库文件；父目录不存在时自动创建，并确保基础表已经存在。"""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -40,8 +40,8 @@ class SQLiteStore:
 
         self._create_schema()
 
+    # 创建 Step 8.1 所需的 sessions、messages、memories 三张表。
     def _create_schema(self) -> None:
-        """创建 Step 8.1 所需的 sessions、messages、memories 三张表。"""
         with self.connection:
             self.connection.executescript(
                 """
@@ -79,8 +79,8 @@ class SQLiteStore:
                 """
             )
 
+    # 把一个 Session 及其全部 messages 作为当前快照写入数据库。
     def save_session(self, session: Session) -> None:
-        """把一个 Session 及其全部 messages 作为当前快照写入数据库。"""
         with self.connection:
             self.connection.execute(
                 """
@@ -127,8 +127,8 @@ class SQLiteStore:
                 ],
             )
 
+    # 按 session_id 恢复 Session；数据库中不存在时返回 None。
     def load_session(self, session_id: str) -> Session | None:
-        """按 session_id 恢复 Session；数据库中不存在时返回 None。"""
         row = self.connection.execute(
             """
             SELECT session_id, created_at, updated_at
@@ -165,11 +165,11 @@ class SQLiteStore:
             ),
         )
 
+    # 把 MemoryManager.records 的完整生命周期快照写入数据库。
     def save_memory_records(
         self,
         records: Iterable[MemoryRecord],
     ) -> None:
-        """把 MemoryManager.records 的完整生命周期快照写入数据库。"""
         snapshot = list(records)
 
         with self.connection:
@@ -206,8 +206,8 @@ class SQLiteStore:
                 ],
             )
 
+    # 恢复全部 Memory 版本，包括 superseded 历史记录。
     def load_memory_records(self) -> list[MemoryRecord]:
-        """恢复全部 Memory 版本，包括 superseded 历史记录。"""
         rows = self.connection.execute(
             """
             SELECT
@@ -240,19 +240,19 @@ class SQLiteStore:
             for row in rows
         ]
 
+    # 关闭 SQLite 连接；数据库文件仍保留在磁盘上。
     def close(self) -> None:
-        """关闭 SQLite 连接；数据库文件仍保留在磁盘上。"""
         self.connection.close()
 
+    # 支持 with SQLiteStore(...) as store 的使用方式。
     def __enter__(self) -> "SQLiteStore":
-        """支持 with SQLiteStore(...) as store 的使用方式。"""
         return self
 
+    # 离开 with 代码块时自动关闭 SQLite 连接。
     def __exit__(
         self,
         exc_type,
         exc_value,
         traceback,
     ) -> None:
-        """离开 with 代码块时自动关闭 SQLite 连接。"""
         self.close()

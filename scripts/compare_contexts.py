@@ -37,14 +37,17 @@ STRATEGIES = (
 )
 
 
+# 返回脚本所在实验项目的根目录。
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+# 读取固定 Scenario JSON，供策略对比复用同一组输入。
 def _load_scenario(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# 截取开头到指定 turn_id 的轮次，找不到目标时拒绝运行。
 def _select_turns(
     turns: list[dict[str, Any]],
     through: str,
@@ -57,6 +60,7 @@ def _select_turns(
     raise ValueError(f"Unknown --through turn: {through}")
 
 
+# 拒绝包含记忆操作的轮次，保持本轮只比较上下文策略。
 def _guard_step6_scope(turns: list[dict[str, Any]]) -> None:
     blocked = [
         turn["turn_id"]
@@ -70,12 +74,14 @@ def _guard_step6_scope(turns: list[dict[str, Any]]) -> None:
         )
 
 
+# 忽略大小写检查答案关键词，返回通过状态与缺失项。
 def _contains_check(answer: str, expected: list[str]) -> tuple[bool, list[str]]:
     folded = answer.casefold()
     missing = [x for x in expected if x.casefold() not in folded]
     return not missing, missing
 
 
+# 从 trace 提取工具名称和参数，供本轮验收使用。
 def _tool_calls(tracer: TraceLogger) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
     for record in tracer.records:
@@ -91,6 +97,7 @@ def _tool_calls(tracer: TraceLogger) -> list[dict[str, Any]]:
     return calls
 
 
+# 核对预期工具及文档参数，未指定工具要求时返回未评判。
 def _tool_check(
     calls: list[dict[str, Any]],
     expected: dict[str, Any] | None,
@@ -108,6 +115,7 @@ def _tool_check(
     return False
 
 
+# 读取最后一条 RUN_SUMMARY，没有汇总时返回空字典。
 def _run_summary(tracer: TraceLogger) -> dict[str, Any]:
     for record in reversed(tracer.records):
         if record["event"] == "RUN_SUMMARY":
@@ -115,8 +123,8 @@ def _run_summary(tracer: TraceLogger) -> dict[str, Any]:
     return {}
 
 
+# 从 CONTEXT_BUILD 事件提取首轮/最大消息数和 Managed Summary 状态。
 def _context_stats(tracer: TraceLogger) -> dict[str, Any]:
-    """从 CONTEXT_BUILD 事件提取首轮/最大消息数和 Managed Summary 状态。"""
     builds = [
         r["payload"]
         for r in tracer.records
@@ -142,6 +150,7 @@ def _context_stats(tracer: TraceLogger) -> dict[str, Any]:
     }
 
 
+# 生成含策略、会话、轮次和微秒时间戳的独立 trace 路径。
 def _trace_path(
     project_root: Path,
     *,
@@ -158,8 +167,8 @@ def _trace_path(
     )
 
 
+# 把策略名称和实验参数转换成对应的 ContextBuilder 配置。
 def _builder(strategy: str, last_n: int, summary_trigger: int) -> ContextBuilder:
-    """把策略名称和实验参数转换成对应的 ContextBuilder 配置。"""
     if strategy == "full_history":
         return ContextBuilder("full_history")
     if strategy == "last_n":
@@ -171,6 +180,7 @@ def _builder(strategy: str, last_n: int, summary_trigger: int) -> ContextBuilder
     )
 
 
+# 汇总三种策略的逐轮记录，生成上下文、token、工具调用和耗时对比报告。
 def _write_report(
     path: Path,
     *,
@@ -181,7 +191,6 @@ def _write_report(
     summary_trigger: int,
     records: list[dict[str, Any]],
 ) -> None:
-    """汇总三种策略的逐轮记录，生成上下文、token、工具调用和耗时对比报告。"""
     strategy_summary: list[dict[str, Any]] = []
     for strategy, label in STRATEGIES:
         rows = [r for r in records if r["strategy"] == strategy]
@@ -300,8 +309,8 @@ def _write_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# 用同一 Scenario 依次运行三种上下文策略，并归档同一时间戳的一组对比结果。
 def main() -> None:
-    """用同一 Scenario 依次运行三种上下文策略，并归档同一时间戳的一组对比结果。"""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--scenario",

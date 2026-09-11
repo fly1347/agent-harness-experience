@@ -36,6 +36,7 @@ class ModelCallResult:
 
 
 class OpenAICompatibleProvider:
+    # 从环境读取模型配置并校验必填项，创建供后续调用使用的客户端。
     def __init__(self) -> None:
         api_key = os.getenv("LLM_API_KEY")
         base_url = os.getenv("LLM_BASE_URL") or None
@@ -55,12 +56,12 @@ class OpenAICompatibleProvider:
 
         self.client = OpenAI(**kwargs)
 
+    # 发送一次可选带 tools 的 Chat Completions 请求，并统一整理模型返回与 usage 元数据。
     def complete(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> ModelCallResult:
-        """发送一次可选带 tools 的 Chat Completions 请求，并统一整理模型返回与 usage 元数据。"""
         request: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -89,8 +90,8 @@ class OpenAICompatibleProvider:
             usage=response.usage.model_dump() if response.usage else None,
         )
 
+    # 把单条 user message 交给 complete，执行不带 AgentLoop 的纯 LLM baseline。
     def chat(self, user_input: str) -> ModelCallResult:
-        """把单条 user message 交给 complete，执行不带 AgentLoop 的纯 LLM baseline。"""
         return self.complete(
             messages=[{"role": "user", "content": user_input}]
         )

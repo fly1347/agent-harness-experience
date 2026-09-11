@@ -27,8 +27,8 @@ from mini_agent_harness.providers.openai_compatible import (
 )
 
 
+# 解析运行模式并组装 baseline、单轮 Agent 或多轮 Session 所需组件。
 def main() -> None:
-    """解析运行模式并组装 baseline、单轮 Agent 或多轮 Session 所需组件。"""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "prompt",

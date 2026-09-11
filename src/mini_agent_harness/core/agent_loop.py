@@ -45,6 +45,7 @@ Rules:
 
 
 class AgentLoop:
+    # 组装模型、工具、上下文和持久化组件，并校验可选重试次数。
     def __init__(
         self,
         provider: OpenAICompatibleProvider,
@@ -69,12 +70,12 @@ class AgentLoop:
         self.memory_manager = memory_manager
         self.state_store = state_store
 
+    # 执行一个完整用户轮次，在模型与工具之间循环，直到得到最终回答并完成统计。
     def run(
         self,
         user_input: str,
         session: Session | None = None,
     ) -> str:
-        """执行一个完整用户轮次，在模型与工具之间循环，直到得到最终回答并完成统计。"""
         run_started = time.perf_counter()
 
         model_calls = 0
@@ -328,6 +329,7 @@ class AgentLoop:
             f"Agent loop exceeded max_steps={self.max_steps}"
         )
 
+    # 执行工具；默认保留旧错误回写语义，显式 max_retry 时由 Harness 重试。
     def _execute_tool_with_retry(
         self,
         *,
@@ -336,7 +338,6 @@ class AgentLoop:
         name: str,
         arguments: dict[str, object],
     ) -> tuple[str, float]:
-        """执行工具；默认保留旧错误回写语义，显式 max_retry 时由 Harness 重试。"""
         if self.max_retry is None:
             tool_started = time.perf_counter()
             try:
@@ -447,6 +448,7 @@ class AgentLoop:
 
         raise AssertionError("unreachable retry loop")
 
+    # 统一记录成功 Tool Result，并显式标注它是第几次执行尝试。
     def _log_tool_result(
         self,
         *,
@@ -458,7 +460,6 @@ class AgentLoop:
         attempt: int,
         retry_count: int,
     ) -> None:
-        """统一记录成功 Tool Result，并显式标注它是第几次执行尝试。"""
         self.tracer.log(
             "TOOL_RESULT",
             {
@@ -481,8 +482,8 @@ class AgentLoop:
             },
         )
 
+    # 正常 Turn 结束后，把 canonical Session 与完整 Memory Lifecycle 自动保存到 SQLite。
     def _persist_state(self, session: Session) -> None:
-        """正常 Turn 结束后，把 canonical Session 与完整 Memory Lifecycle 自动保存到 SQLite。"""
         if self.state_store is None:
             return
 
@@ -514,9 +515,9 @@ class AgentLoop:
             },
         )
 
+    # 把 MemoryRecord 转成适合 Trace 展示和 JSONL 固化的基础字段。
     @staticmethod
     def _memory_record_payload(record: MemoryRecord) -> dict[str, str]:
-        """把 MemoryRecord 转成适合 Trace 展示和 JSONL 固化的基础字段。"""
         return {
             "memory_id": record.memory_id,
             "kind": record.kind,
@@ -525,8 +526,8 @@ class AgentLoop:
             "status": record.status,
         }
 
+    # 在最终回答后处理本轮明确的长期记忆写入或替换指令。
     def _apply_memory_instruction(self, user_input: str) -> None:
-        """在最终回答后处理本轮明确的长期记忆写入或替换指令。"""
         if self.memory_manager is None:
             return
 

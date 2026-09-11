@@ -33,6 +33,7 @@ class _Provider:
     def __init__(self) -> None:
         self.requests: list[tuple[list[dict[str, object]], object]] = []
 
+    # 保存请求快照并返回固定回复，供测试检查模型实际收到的上下文。
     def complete(self, messages, tools=None):
         frozen = deepcopy(messages)
         self.requests.append((frozen, tools))
@@ -58,6 +59,7 @@ class _Tracer:
     def __init__(self) -> None:
         self.records: list[dict[str, object]] = []
 
+    # 将测试事件保存到内存，供用例检查执行顺序和内容。
     def log(self, event, payload, console=None):
         self.records.append({"event": event, "payload": payload})
 
@@ -79,12 +81,14 @@ class _LocalTools:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
 
+    # 记录本地调用并返回文档，检查非审阅工具是否保留本地路由。
     def execute(self, name, arguments):
         self.calls.append((name, arguments))
         return "local document"
 
 
 class ReviewerSubagentTests(unittest.TestCase):
+    # 确认 Reviewer 只收到显式委派消息，不继承母上下文或工具。
     def test_reviewer_receives_only_isolated_delegated_context(self) -> None:
         provider = _Provider()
         tracer = _Tracer()
@@ -115,6 +119,7 @@ class ReviewerSubagentTests(unittest.TestCase):
         self.assertIn("SUBAGENT_MODEL_RESPONSE", events)
         self.assertIn("SUBAGENT_RESULT", events)
 
+    # 确认审阅请求交给 Reviewer，原有文档工具仍走本地执行。
     def test_review_answer_delegates_and_other_tools_remain_local(self) -> None:
         provider = _Provider()
         tracer = _Tracer()

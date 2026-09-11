@@ -20,6 +20,7 @@ from typing import Any
 from uuid import uuid4
 
 
+# 生成带时区的 UTC 时间，供会话记录创建和更新时间。
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -31,7 +32,7 @@ class Session:
     created_at: datetime = field(default_factory=_utc_now)
     updated_at: datetime = field(default_factory=_utc_now)
 
+    # 把消息深拷贝追加到完整会话历史，并刷新 Session 更新时间。
     def add_message(self, message: dict[str, Any]) -> None:
-        """把消息深拷贝追加到完整会话历史，并刷新 Session 更新时间。"""
         self.messages.append(deepcopy(message))
         self.updated_at = _utc_now()

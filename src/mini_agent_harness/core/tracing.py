@@ -20,6 +20,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 
+# 按当前北京时间的小时选择实验价格快照档位，不查询实时价格。
 def _pricing_snapshot() -> dict[str, Any]:
     now_bj = datetime.now(ZoneInfo("Asia/Shanghai"))
     hour = now_bj.hour
@@ -47,6 +48,7 @@ def _pricing_snapshot() -> dict[str, Any]:
     }
 
 
+# 按缓存命中、未命中和输出用量计算人民币参考费用。
 def _estimate_cost(
     cache_hit_tokens: int,
     cache_miss_tokens: int,
@@ -64,19 +66,20 @@ def _estimate_cost(
 
 
 class TraceLogger:
+    # 准备 JSONL 与 Markdown 路径并创建母目录，初始化内存事件列表。
     def __init__(self, path: Path) -> None:
         self.path = path
         self.md_path = path.with_suffix(".md")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.records: list[dict[str, Any]] = []
 
+    # 深拷贝固化一次运行事件，同时写入内存、JSONL，并按需输出精简终端信息。
     def log(
         self,
         event: str,
         payload: dict[str, Any],
         console: dict[str, Any] | None = None,
     ) -> None:
-        """深拷贝固化一次运行事件，同时写入内存、JSONL，并按需输出精简终端信息。"""
         # 记录时立即做快照，避免可变消息列表继续增长后污染旧的 MODEL_REQUEST。
         frozen_payload = deepcopy(payload)
 
@@ -94,6 +97,7 @@ class TraceLogger:
         print(f"\n===== {event} =====")
         print(json.dumps(shown, ensure_ascii=False, indent=2))
 
+    # 汇总一次用户轮次的 token、耗时和成本，写入 RUN_SUMMARY 并生成 Markdown Trace。
     def finalize(
         self,
         *,
@@ -109,7 +113,6 @@ class TraceLogger:
         tool_ms: float,
         end_to_end_ms: float,
     ) -> dict[str, Any]:
-        """汇总一次用户轮次的 token、耗时和成本，写入 RUN_SUMMARY 并生成 Markdown Trace。"""
         pricing = _pricing_snapshot()
 
         # Step 10.3 的 Reviewer 是嵌套在 review_answer 工具调用里的独立模型调用。
@@ -195,6 +198,7 @@ class TraceLogger:
 
         return summary
 
+    # 按事件顺序关联模型、工具和扩展调用，生成执行概览表行。
     def _execution_rows(
         self,
         summary: dict[str, Any],
@@ -594,6 +598,7 @@ class TraceLogger:
 
         return rows
 
+    # 将表头和已有单元格内容拼成 Markdown 表格行。
     @staticmethod
     def _markdown_table(
         headers: list[str],
@@ -609,12 +614,12 @@ class TraceLogger:
 
         return lines
 
+    # 生成面向人工复核的单轮 Trace；用户问题紧邻 Execution Overview 展示。
     def _write_markdown(
         self,
         user_input: str,
         summary: dict[str, Any],
     ) -> None:
-        """生成面向人工复核的单轮 Trace；用户问题紧邻 Execution Overview 展示。"""
         t = summary["tokens"]
         tm = summary["timing_ms"]
 

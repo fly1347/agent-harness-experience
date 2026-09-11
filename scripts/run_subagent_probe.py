@@ -32,27 +32,27 @@ _PROMPT = (
 )
 
 
+# 返回实验项目根目录。
 def _project_root() -> Path:
-    """返回实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 生成带微秒时间戳的 Step 10.3 Trace 路径，避免覆盖旧实验。
 def _trace_path(project_root: Path) -> Path:
-    """生成带微秒时间戳的 Step 10.3 Trace 路径，避免覆盖旧实验。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return project_root / "artifacts" / "traces" / f"step10-subagent-{stamp}.jsonl"
 
 
+# 返回某事件第一次出现的 payload，供 Probe 做简洁验收。
 def _find_payload(tracer: TraceLogger, event: str) -> dict[str, Any] | None:
-    """返回某事件第一次出现的 payload，供 Probe 做简洁验收。"""
     for record in tracer.records:
         if record["event"] == event:
             return record["payload"]
     return None
 
 
+# 写出 Step 10.3 人工验收报告，重点展示委派边界与 Reviewer 上下文隔离。
 def _write_report(*, path: Path, tracer: TraceLogger, answer: str) -> bool:
-    """写出 Step 10.3 人工验收报告，重点展示委派边界与 Reviewer 上下文隔离。"""
     events = [record["event"] for record in tracer.records]
     context = _find_payload(tracer, "SUBAGENT_CONTEXT") or {}
     review = _find_payload(tracer, "SUBAGENT_RESULT") or {}
@@ -141,8 +141,8 @@ def _write_report(*, path: Path, tracer: TraceLogger, answer: str) -> bool:
     return passed
 
 
+# 运行一次真实母 Agent → Reviewer → 母 Agent 链，并输出最终验收结果。
 def main() -> None:
-    """运行一次真实母 Agent → Reviewer → 母 Agent 链，并输出最终验收结果。"""
     project_root = _project_root()
     load_dotenv(project_root / ".env")
 

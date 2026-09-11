@@ -38,6 +38,7 @@ class _ProviderLike(Protocol):
 
     model: str
 
+    # 约定 Reviewer 所需的模型调用接口，不提供具体实现。
     def complete(
         self,
         messages: list[dict[str, Any]],
@@ -59,6 +60,7 @@ class ReviewerSubagent:
         self.tracer = tracer
         self.name = name
 
+    # 只用显式委派内容构造两条消息执行审阅，不继承母 Agent 的任何消息。
     def run(
         self,
         *,
@@ -66,7 +68,6 @@ class ReviewerSubagent:
         draft: str,
         evidence: str,
     ) -> str:
-        """只用显式委派内容构造两条消息执行审阅，不继承母 Agent 的任何消息。"""
         delegated_user = (
             "Delegated review task:\n"
             f"{task.strip()}\n\n"
@@ -146,13 +147,13 @@ class ReviewerSubagent:
         )
         return review
 
+    # 有 tracer 时固化 Subagent 边界事件；无 tracer 时保持组件可独立测试。
     def _log(
         self,
         event: str,
         payload: dict[str, Any],
         console: dict[str, Any] | None = None,
     ) -> None:
-        """有 tracer 时固化 Subagent 边界事件；无 tracer 时保持组件可独立测试。"""
         if self.tracer is not None:
             self.tracer.log(event, payload, console=console)
 
@@ -160,6 +161,7 @@ class ReviewerSubagent:
 class SubagentToolRegistry:
     """混合工具注册表：保留本地工具，并追加一个把审阅任务委派给 Reviewer 的工具。"""
 
+    # 在本地工具列表中加入审阅委派入口，并保存 Reviewer 与追踪器。
     def __init__(
         self,
         *,
@@ -172,13 +174,13 @@ class SubagentToolRegistry:
         self.tracer = tracer
         self._schemas = [*local_tools.schemas, self._review_schema()]
 
+    # 返回原本本地工具加 review_answer 委派工具的 function calling schema。
     @property
     def schemas(self) -> list[dict[str, Any]]:
-        """返回原本本地工具加 review_answer 委派工具的 function calling schema。"""
         return self._schemas
 
+    # review_answer 走 Reviewer Subagent；其他工具继续走 Local ToolRegistry。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """review_answer 走 Reviewer Subagent；其她工具继续走 Local ToolRegistry。"""
         if name != "review_answer":
             return self.local_tools.execute(name, arguments)
 
@@ -210,9 +212,9 @@ class SubagentToolRegistry:
             evidence=evidence,
         )
 
+    # 定义母 Agent 用来显式委派 Reviewer 的最小工具 schema。
     @staticmethod
     def _review_schema() -> dict[str, Any]:
-        """定义母 Agent 用来显式委派 Reviewer 的最小工具 schema。"""
         return {
             "type": "function",
             "function": {
@@ -245,12 +247,12 @@ class SubagentToolRegistry:
             },
         }
 
+    # 统一记录母 Agent 到 Reviewer 的委派边界。
     def _log(
         self,
         event: str,
         payload: dict[str, Any],
         console: dict[str, Any] | None = None,
     ) -> None:
-        """统一记录母 Agent 到 Reviewer 的委派边界。"""
         if self.tracer is not None:
             self.tracer.log(event, payload, console=console)

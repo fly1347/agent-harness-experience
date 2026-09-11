@@ -29,6 +29,7 @@ class _Message:
         self.content = content
         self.tool_calls = tool_calls
 
+    # 把测试消息转成运行器消费的字典结构。
     def model_dump(self, exclude_none: bool = False) -> dict[str, object]:
         payload: dict[str, object] = {
             "role": self.role,
@@ -58,6 +59,7 @@ class _Provider:
         self.calls = 0
         self.requests: list[list[dict[str, object]]] = []
 
+    # 首轮返回读取工具调用、次轮返回答案，并记录每次请求。
     def complete(self, messages, tools=None):
         self.calls += 1
         request_messages = deepcopy(messages)
@@ -104,6 +106,7 @@ class _FailOnceTools:
     def __init__(self) -> None:
         self.attempts = 0
 
+    # 第一次执行抛出瞬时错误，后续执行返回固定内容。
     def execute(self, name, arguments):
         self.attempts += 1
         if self.attempts == 1:
@@ -119,6 +122,7 @@ class _AlwaysFailTools:
     def __init__(self) -> None:
         self.attempts = 0
 
+    # 记录尝试次数并持续抛错，供重试耗尽用例检查。
     def execute(self, name, arguments):
         self.attempts += 1
         raise OSError("injected persistent failure")
@@ -130,16 +134,18 @@ class _Tracer:
     def __init__(self) -> None:
         self.records: list[dict[str, object]] = []
 
+    # 将测试事件保存到内存，供用例检查执行顺序和内容。
     def log(self, event, payload, console=None):
         self.records.append({"event": event, "payload": payload})
 
+    # 返回空统计，避免测试替身写入真实运行报告。
     def finalize(self, **kwargs):
         return {}
 
 
 class ToolRetryTests(unittest.TestCase):
+    # 未显式启用 retry 时，保留旧的“错误写回模型再自行恢复”行为。
     def test_default_mode_preserves_step1_to_step9_error_writeback(self) -> None:
-        """未显式启用 retry 时，保留旧的“错误写回模型再自行恢复”行为。"""
         provider = _Provider()
         tools = _AlwaysFailTools()
         tracer = _Tracer()
@@ -158,6 +164,7 @@ class ToolRetryTests(unittest.TestCase):
         self.assertIn("ERROR", events)
         self.assertNotIn("TOOL_RETRY", events)
 
+    # 首次工具失败后重试成功，确认循环继续到最终回答。
     def test_fail_once_retries_once_and_continues_agent_loop(self) -> None:
         provider = _Provider()
         tools = _FailOnceTools()
@@ -180,6 +187,7 @@ class ToolRetryTests(unittest.TestCase):
         self.assertIn("TOOL_RESULT", events)
         self.assertNotIn("TOOL_RETRY_EXHAUSTED", events)
 
+    # 工具持续失败时只允许一次重试，随后停止本轮模型循环。
     def test_persistent_failure_stops_after_one_retry(self) -> None:
         provider = _Provider()
         tools = _AlwaysFailTools()

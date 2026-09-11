@@ -51,13 +51,13 @@ POST_RESTART_TURNS = ("T09", "T10")
 EXPECTED_FOCUS = "Context Management + 评估信度"
 
 
+# 返回实验项目根目录。
 def _project_root() -> Path:
-    """返回实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 读取并校验冻结的 T01～T10 / T08 restart Scenario。
 def _load_scenario(path: Path) -> dict[str, Any]:
-    """读取并校验冻结的 T01～T10 / T08 restart Scenario。"""
     data = json.loads(path.read_text(encoding="utf-8"))
     turns = data.get("turns")
     if not isinstance(turns, list) or len(turns) < 10:
@@ -72,18 +72,18 @@ def _load_scenario(path: Path) -> dict[str, Any]:
     return data
 
 
+# 建立 turn_id -> turn 映射。
 def _turns_by_id(scenario: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """建立 turn_id -> turn 映射。"""
     return {turn["turn_id"]: turn for turn in scenario["turns"]}
 
 
+# 按策略创建 ContextBuilder；参数与 Step 6/7 保持同一口径。
 def _builder(
     strategy: str,
     *,
     last_n: int,
     summary_trigger: int,
 ) -> ContextBuilder:
-    """按策略创建 ContextBuilder；参数与 Step 6/7 保持同一口径。"""
     if strategy == "full_history":
         return ContextBuilder("full_history")
     if strategy == "last_n":
@@ -97,8 +97,8 @@ def _builder(
     raise ValueError(f"Unknown strategy: {strategy}")
 
 
+# 创建真实模型 Provider 与固定三个 Tool。
 def _runtime(project_root: Path) -> tuple[OpenAICompatibleProvider, ToolRegistry]:
-    """创建真实模型 Provider 与固定三个 Tool。"""
     load_dotenv(project_root / ".env")
     return (
         OpenAICompatibleProvider(),
@@ -109,6 +109,7 @@ def _runtime(project_root: Path) -> tuple[OpenAICompatibleProvider, ToolRegistry
     )
 
 
+# 生成不会覆盖旧结果的 Step 9 Trace 文件名。
 def _trace_path(
     project_root: Path,
     *,
@@ -116,7 +117,6 @@ def _trace_path(
     session_id: str,
     turn_id: str,
 ) -> Path:
-    """生成不会覆盖旧结果的 Step 9 Trace 文件名。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
         project_root
@@ -126,8 +126,8 @@ def _trace_path(
     )
 
 
+# 读取 Trace 中某类事件的 payload。
 def _events(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
-    """读取 Trace 中某类事件的 payload。"""
     return [
         record["payload"]
         for record in tracer.records
@@ -135,14 +135,14 @@ def _events(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
     ]
 
 
+# 读取本轮 RUN_SUMMARY。
 def _run_summary(tracer: TraceLogger) -> dict[str, Any]:
-    """读取本轮 RUN_SUMMARY。"""
     rows = _events(tracer, "RUN_SUMMARY")
     return rows[-1] if rows else {}
 
 
+# 抽取本轮 working context 的关键统计。
 def _context_stats(tracer: TraceLogger) -> dict[str, Any]:
-    """抽取本轮 working context 的关键统计。"""
     rows = _events(tracer, "CONTEXT_BUILD")
     if not rows:
         return {
@@ -165,8 +165,8 @@ def _context_stats(tracer: TraceLogger) -> dict[str, Any]:
     }
 
 
+# 抽取本轮工具调用。
 def _tool_calls(tracer: TraceLogger) -> list[dict[str, Any]]:
-    """抽取本轮工具调用。"""
     return [
         {
             "name": payload.get("name"),
@@ -176,18 +176,18 @@ def _tool_calls(tracer: TraceLogger) -> list[dict[str, Any]]:
     ]
 
 
+# 校验答案关键词。
 def _contains_check(answer: str, expected: list[str]) -> tuple[bool, list[str]]:
-    """校验答案关键词。"""
     folded = answer.casefold()
     missing = [item for item in expected if item.casefold() not in folded]
     return not missing, missing
 
 
+# 校验固定工具；expected_tool=null 时不强制某个工具。
 def _tool_check(
     calls: list[dict[str, Any]],
     expected: dict[str, Any] | None,
 ) -> bool | None:
-    """校验固定工具；expected_tool=null 时不强制某个工具。"""
     if expected is None:
         return None
 
@@ -200,11 +200,11 @@ def _tool_check(
     return False
 
 
+# 校验 T04 write、T07 supersede、T09 read/inject。
 def _memory_check(
     tracer: TraceLogger,
     expected: dict[str, Any] | None,
 ) -> bool | None:
-    """校验 T04 write、T07 supersede、T09 read/inject。"""
     if expected is None:
         return None
 
@@ -248,8 +248,8 @@ def _memory_check(
     raise ValueError(f"Unsupported memory action: {action}")
 
 
+# 确认新 worker 恢复了 Conversation 与完整 Memory Lifecycle。
 def _recovery_ok(session: Session, memory: MemoryManager) -> bool:
-    """确认新 worker 恢复了 Conversation 与完整 Memory Lifecycle。"""
     records = [
         item
         for item in memory.records
@@ -265,8 +265,8 @@ def _recovery_ok(session: Session, memory: MemoryManager) -> bool:
     )
 
 
+# 抑制 TraceLogger 的逐事件终端打印；异常时再显示捕获内容。
 def _run_quiet(agent: AgentLoop, user_input: str, session: Session) -> str:
-    """抑制 TraceLogger 的逐事件终端打印；异常时再显示捕获内容。"""
     buffer = io.StringIO()
     try:
         with redirect_stdout(buffer):
@@ -278,13 +278,14 @@ def _run_quiet(agent: AgentLoop, user_input: str, session: Session) -> str:
         raise
 
 
+# 把单轮结果追加到策略 JSONL。
 def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    """把单轮结果追加到策略 JSONL。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+# 运行一个 Turn，并立即把验收结果落盘。
 def _run_turn(
     *,
     project_root: Path,
@@ -299,7 +300,6 @@ def _run_turn(
     output_path: Path,
     restart_ok: bool | None = None,
 ) -> None:
-    """运行一个 Turn，并立即把验收结果落盘。"""
     turn_id = turn["turn_id"]
     tracer = TraceLogger(
         _trace_path(
@@ -403,6 +403,7 @@ def _run_turn(
     )
 
 
+# worker A：T01～T08。函数返回后该 Python 进程由 subprocess 正常退出。
 def _pre_restart_worker(
     *,
     project_root: Path,
@@ -414,7 +415,6 @@ def _pre_restart_worker(
     last_n: int,
     summary_trigger: int,
 ) -> None:
-    """worker A：T01～T08。函数返回后该 Python 进程由 subprocess 正常退出。"""
     turns = _turns_by_id(_load_scenario(scenario_path))
     provider, tools = _runtime(project_root)
     session = Session(session_id=session_id)
@@ -450,6 +450,7 @@ def _pre_restart_worker(
     print(f"===== {strategy} PRE EXIT | pid={os.getpid()} =====")
 
 
+# worker B：只凭 SQLite 恢复状态并运行 T09～T10。
 def _post_restart_worker(
     *,
     project_root: Path,
@@ -461,7 +462,6 @@ def _post_restart_worker(
     last_n: int,
     summary_trigger: int,
 ) -> None:
-    """worker B：只凭 SQLite 恢复状态并运行 T09～T10。"""
     turns = _turns_by_id(_load_scenario(scenario_path))
     provider, tools = _runtime(project_root)
     builder = _builder(
@@ -496,6 +496,7 @@ def _post_restart_worker(
     print(f"===== {strategy} POST EXIT | pid={os.getpid()} =====")
 
 
+# 构造内部 worker 命令。
 def _worker_command(
     *,
     script: Path,
@@ -508,7 +509,6 @@ def _worker_command(
     last_n: int,
     summary_trigger: int,
 ) -> list[str]:
-    """构造内部 worker 命令。"""
     return [
         sys.executable,
         str(script),
@@ -531,8 +531,8 @@ def _worker_command(
     ]
 
 
+# 读取一份策略结果，用于母调度流程打印最终摘要。
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """读取一份策略结果，用于母调度流程打印最终摘要。"""
     return [
         json.loads(line)
         for line in path.read_text(encoding="utf-8").splitlines()
@@ -541,15 +541,15 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 
+# 把三态校验值转成适合 Markdown 展示的文本。
 def _pass_text(value: bool | None) -> str:
-    """把三态校验值转成适合 Markdown 展示的文本。"""
     if value is None:
         return "—"
     return "PASS" if value else "FAIL"
 
 
+# 汇总一套 Context Strategy 的模型调用、工具、token、耗时与成本。
 def _strategy_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """汇总一套 Context Strategy 的模型调用、工具、token、耗时与成本。"""
     return {
         "turn_passed": sum(1 for row in rows if row["turn_success"]),
         "model_calls": sum(int(row.get("model_calls") or 0) for row in rows),
@@ -568,15 +568,15 @@ def _strategy_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# 兼容旧 Step 9 JSONL 的 context_recall_success，并统一解释为“无需重新读取工具”。
 def _no_refetch_value(row: dict[str, Any]) -> bool | None:
-    """兼容旧 Step 9 JSONL 的 context_recall_success，并统一解释为“无需重新读取工具”。"""
     if "no_refetch_success" in row:
         return row.get("no_refetch_success")
     return row.get("context_recall_success")
 
 
+# 从本批真实结果还原 T01～T10 核心脚本，便于报告随时对照实验目的。
 def _scenario_block(rows: list[dict[str, Any]]) -> list[str]:
-    """从本批真实结果还原 T01～T10 核心脚本，便于报告随时对照实验目的。"""
     lines = ["## Core Scenario", "", "```text"]
     for row in rows:
         lines.append(f"{row['turn_id']}  {row['user_input']}")
@@ -586,6 +586,7 @@ def _scenario_block(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+# 为单套 Context Strategy 生成与 JSONL 配套的人类可读 MD。
 def _write_strategy_report(
     path: Path,
     *,
@@ -593,7 +594,6 @@ def _write_strategy_report(
     rows: list[dict[str, Any]],
     jsonl_path: Path,
 ) -> None:
-    """为单套 Context Strategy 生成与 JSONL 配套的人类可读 MD。"""
     totals = _strategy_totals(rows)
     t09 = next(row for row in rows if row["turn_id"] == "T09")
     t10 = next(row for row in rows if row["turn_id"] == "T10")
@@ -700,12 +700,12 @@ def _write_strategy_report(
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+# 根据三份真实 JSONL 生成 Context Strategy 总对比 MD。
 def _write_comparison_report(
     path: Path,
     *,
     outputs: dict[str, Path],
 ) -> None:
-    """根据三份真实 JSONL 生成 Context Strategy 总对比 MD。"""
     rows_by_strategy = {
         strategy: _read_jsonl(jsonl_path)
         for strategy, jsonl_path in outputs.items()
@@ -835,6 +835,7 @@ def _write_comparison_report(
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+# 母调度流程：每种策略严格经过 worker A 退出 -> worker B 新启动。
 def _orchestrate(
     *,
     project_root: Path,
@@ -843,7 +844,6 @@ def _orchestrate(
     last_n: int,
     summary_trigger: int,
 ) -> None:
-    """母调度流程：每种策略严格经过 worker A 退出 -> worker B 新启动。"""
     _load_scenario(scenario_path)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     script = Path(__file__).resolve()
@@ -939,8 +939,8 @@ def _orchestrate(
     print(f"comparison MD: {comparison_path}")
 
 
+# 默认一次跑三策略；隐藏 worker 参数仅由母调度流程内部使用。
 def main() -> None:
-    """默认一次跑三策略；隐藏 worker 参数仅由母调度流程内部使用。"""
     parser = argparse.ArgumentParser(
         description="Step 9 full T01-T10 replay with real restart after T08."
     )

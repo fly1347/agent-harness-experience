@@ -31,13 +31,13 @@ _PROMPT = (
 )
 
 
+# 返回实验项目根目录。
 def _project_root() -> Path:
-    """返回实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 生成带微秒时间戳的 Step 10.2 JSONL Trace 路径，避免覆盖旧实验。
 def _trace_path(project_root: Path) -> Path:
-    """生成带微秒时间戳的 Step 10.2 JSONL Trace 路径，避免覆盖旧实验。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
         project_root
@@ -47,6 +47,7 @@ def _trace_path(project_root: Path) -> Path:
     )
 
 
+# 写出 MCP Probe 的人工验收摘要，突出本地 Tool 与 MCP Tool 的路径变化。
 def _write_report(
     *,
     path: Path,
@@ -54,7 +55,6 @@ def _write_report(
     answer: str,
     protocol_version: str | None,
 ) -> None:
-    """写出 MCP Probe 的人工验收摘要，突出本地 Tool 与 MCP Tool 的路径变化。"""
     events = [record["event"] for record in tracer.records]
     required = {
         "mcp_connected": "MCP_CONNECT" in events,
@@ -118,8 +118,8 @@ def _write_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# 保持一个 MCP stdio 会话贯穿工具发现和实际调用，并执行一次真实 Agent Turn。
 async def _run() -> tuple[Path, bool]:
-    """保持一个 MCP stdio 会话贯穿工具发现和实际调用，并执行一次真实 Agent Turn。"""
     project_root = _project_root()
     load_dotenv(project_root / ".env")
 
@@ -191,8 +191,8 @@ async def _run() -> tuple[Path, bool]:
     return report_path, passed
 
 
+# 运行真实 MCP Probe，并在终端只输出最终验收结论与报告位置。
 def main() -> None:
-    """运行真实 MCP Probe，并在终端只输出最终验收结论与报告位置。"""
     print("\n===== STEP 10.2 MCP =====")
     report_path, passed = asyncio.run(_run())
 

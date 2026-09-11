@@ -39,6 +39,7 @@ class ContextBuild:
 class ContextBuilder:
     """按指定策略从完整 Session 历史生成本次模型请求使用的 working context。"""
 
+    # 校验上下文策略与窗口大小，保存摘要触发和长度配置。
     def __init__(
         self,
         strategy: ContextStrategy = "full_history",
@@ -59,13 +60,13 @@ class ContextBuilder:
         self.summary_trigger_messages = summary_trigger_messages
         self.summary_max_chars = summary_max_chars
 
+    # 根据当前策略构造一次 Model Call 的消息列表，并返回对应上下文统计。
     def build(
         self,
         history: list[dict[str, Any]],
         *,
         active_memory: list[str] | None = None,
     ) -> ContextBuild:
-        """根据当前策略构造一次 Model Call 的消息列表，并返回对应上下文统计。"""
         if not history:
             return ContextBuild(
                 strategy=self.strategy,
@@ -155,12 +156,12 @@ class ContextBuilder:
             active_memory_count=len(memory),
         )
 
+    # 选取最近一段完整对话窗口，尽量不从孤立的 assistant/tool 消息中间开始。
     @staticmethod
     def _recent_window(
         body: list[dict[str, Any]],
         n: int,
     ) -> tuple[list[dict[str, Any]], int]:
-        """选取最近一段完整对话窗口，尽量不从孤立的 assistant/tool 消息中间开始。"""
         if len(body) <= n:
             return body, 0
 
@@ -188,8 +189,8 @@ class ContextBuilder:
 
         return body[start:], start
 
+    # 提取较早的 user / final assistant 内容做确定性压缩，生成 Managed Context 摘要。
     def _summarize(self, messages: list[dict[str, Any]]) -> str:
-        """提取较早的 user / final assistant 内容做确定性压缩，生成 Managed Context 摘要。"""
         pieces: list[str] = []
         used = 0
 
@@ -224,9 +225,9 @@ class ContextBuilder:
 
         return "\n".join(pieces)
 
+    # 把当前有效长期记忆作为“当前状态层”注入，并明确它与历史摘要的冲突优先级。
     @staticmethod
     def _memory_message(memory: list[str]) -> dict[str, str]:
-        """把当前有效长期记忆作为“当前状态层”注入，并明确它与历史摘要的冲突优先级。"""
         return {
             "role": "system",
             "content": (

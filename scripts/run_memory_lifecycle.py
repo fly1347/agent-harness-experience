@@ -32,13 +32,13 @@ _START_TURN = "T04"
 _END_TURN = "T08"
 
 
+# 返回当前实验项目根目录。
 def _project_root() -> Path:
-    """返回当前实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 从固定 Scenario 中截取 Step 7 使用的 T04～T08。
 def _load_turns(path: Path) -> list[dict[str, Any]]:
-    """从固定 Scenario 中截取 Step 7 使用的 T04～T08。"""
     data = json.loads(path.read_text(encoding="utf-8"))
     selected: list[dict[str, Any]] = []
     active = False
@@ -59,8 +59,8 @@ def _load_turns(path: Path) -> list[dict[str, Any]]:
     return selected
 
 
+# 为每轮 Step 7 Trace 生成独立带时间戳文件名。
 def _trace_path(project_root: Path, session_id: str, turn_id: str) -> Path:
-    """为每轮 Step 7 Trace 生成独立带时间戳文件名。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
         project_root
@@ -70,8 +70,8 @@ def _trace_path(project_root: Path, session_id: str, turn_id: str) -> Path:
     )
 
 
+# 从当前轮 Trace 中取出指定事件的 payload 列表。
 def _event_payloads(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
-    """从当前轮 Trace 中取出指定事件的 payload 列表。"""
     return [
         record["payload"]
         for record in tracer.records
@@ -79,18 +79,18 @@ def _event_payloads(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
     ]
 
 
+# 读取当前轮最后生成的 RUN_SUMMARY。
 def _run_summary(tracer: TraceLogger) -> dict[str, Any]:
-    """读取当前轮最后生成的 RUN_SUMMARY。"""
     items = _event_payloads(tracer, "RUN_SUMMARY")
     return items[-1] if items else {}
 
 
+# 按 Scenario 的 expected_memory_action 校验本轮 Memory 生命周期结果。
 def _memory_check(
     turn: dict[str, Any],
     tracer: TraceLogger,
     memory: MemoryManager,
 ) -> tuple[bool, str]:
-    """按 Scenario 的 expected_memory_action 校验本轮 Memory 生命周期结果。"""
     expected = turn.get("expected_memory_action")
     if expected is None:
         active = memory.retrieve_active()
@@ -118,16 +118,16 @@ def _memory_check(
     return event_ok and value_ok, action
 
 
+# 把逐轮实验结果写成 JSONL，供后续 Step 9 汇总复用。
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    """把逐轮实验结果写成 JSONL，供后续 Step 9 汇总复用。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+# 生成 Step 7 Memory Lifecycle 的简洁人工阅读报告。
 def _write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
-    """生成 Step 7 Memory Lifecycle 的简洁人工阅读报告。"""
     passed = sum(1 for row in rows if row["memory_success"])
     lines = [
         "# Step 7 Memory Lifecycle",
@@ -164,8 +164,8 @@ def _write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# 真实运行 T04～T08，并归档 Memory Write / Read / Inject / Supersede 结果。
 def main() -> None:
-    """真实运行 T04～T08，并归档 Memory Write / Read / Inject / Supersede 结果。"""
     project_root = _project_root()
     load_dotenv(project_root / ".env")
 

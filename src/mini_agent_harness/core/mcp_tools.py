@@ -29,6 +29,7 @@ from mini_agent_harness.core.tracing import TraceLogger
 class MCPStdioBridge:
     """维护一个 stdio MCP Client 会话，并把 async MCP 调用桥接给同步 AgentLoop。"""
 
+    # 保存服务与文档路径，初始化尚未连接的 MCP 会话状态。
     def __init__(
         self,
         *,
@@ -46,8 +47,8 @@ class MCPStdioBridge:
         self.server_info: dict[str, Any] = {}
         self.protocol_version: str | None = None
 
+    # 启动 stdio Server 子进程、完成 MCP 握手，并缓存 Server 暴露的工具 schema。
     async def __aenter__(self) -> "MCPStdioBridge":
-        """启动 stdio Server 子进程、完成 MCP 握手，并缓存 Server 暴露的工具 schema。"""
         # MCP SDK 只在真正运行 Step 10.2 时导入；旧实验和离线单测不因此强依赖 MCP。
         from mcp import Client, StdioServerParameters
 
@@ -112,26 +113,26 @@ class MCPStdioBridge:
         )
         return self
 
+    # 关闭 MCP Client 会话，并让 SDK 按 stdio 生命周期回收 Server 子进程。
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        """关闭 MCP Client 会话，并让 SDK 按 stdio 生命周期回收 Server 子进程。"""
         if self._client_cm is not None:
             await self._client_cm.__aexit__(exc_type, exc, tb)
         self._client = None
         self._client_cm = None
         self._loop = None
 
+    # 返回 MCP Server 在握手后动态发现到的某个工具 schema。
     def tool_schema(self, name: str) -> dict[str, Any]:
-        """返回 MCP Server 在握手后动态发现到的某个工具 schema。"""
         if name not in self._schemas:
             raise KeyError(f"MCP tool not discovered: {name}")
         return self._schemas[name]
 
+    # 从 AgentLoop worker thread 同步等待一次 MCP call_tool 结果。
     def call_tool_sync(
         self,
         name: str,
         arguments: dict[str, Any],
     ) -> str:
-        """从 AgentLoop worker thread 同步等待一次 MCP call_tool 结果。"""
         if self._client is None or self._loop is None:
             raise RuntimeError("MCP bridge is not connected.")
 
@@ -172,9 +173,9 @@ class MCPStdioBridge:
             raise RuntimeError(f"MCP tool {name!r} failed: {text}")
         return text
 
+    # 把 MCP list_tools 返回的工具定义转换为现有模型 Provider 使用的 function schema。
     @staticmethod
     def _to_openai_schema(tool: Any) -> dict[str, Any]:
-        """把 MCP list_tools 返回的工具定义转换为现有模型 Provider 使用的 function schema。"""
         return {
             "type": "function",
             "function": {
@@ -184,9 +185,9 @@ class MCPStdioBridge:
             },
         }
 
+    # 提取 MCP CallToolResult 中给模型阅读的文本 content。
     @staticmethod
     def _result_text(result: Any) -> str:
-        """提取 MCP CallToolResult 中给模型阅读的文本 content。"""
         chunks: list[str] = []
         for block in getattr(result, "content", []) or []:
             text = getattr(block, "text", None)
@@ -194,13 +195,13 @@ class MCPStdioBridge:
                 chunks.append(str(text))
         return "\n".join(chunks)
 
+    # 有 TraceLogger 时记录 MCP 边界事件；无 tracer 时保持适配层可独立测试。
     def _log(
         self,
         event: str,
         payload: dict[str, Any],
         console: dict[str, Any] | None = None,
     ) -> None:
-        """有 TraceLogger 时记录 MCP 边界事件；无 tracer 时保持适配层可独立测试。"""
         if self.tracer is not None:
             self.tracer.log(event, payload, console=console)
 
@@ -208,6 +209,7 @@ class MCPStdioBridge:
 class MCPToolRegistry:
     """混合工具注册表：read_document 走 MCP，其她工具继续走原本本地实现。"""
 
+    # 组合本地工具与 MCP 桥接器，建立供模型使用的工具列表。
     def __init__(
         self,
         *,
@@ -218,19 +220,19 @@ class MCPToolRegistry:
         self.bridge = bridge
         self._schemas = self._build_schemas()
 
+    # 保留原工具顺序，但用 MCP 动态发现的 read_document schema 替换本地定义。
     @property
     def schemas(self) -> list[dict[str, Any]]:
-        """保留原工具顺序，但用 MCP 动态发现的 read_document schema 替换本地定义。"""
         return self._schemas
 
+    # 只把 read_document 路由到 MCP；其他工具仍交给 Local ToolRegistry。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """只把 read_document 路由到 MCP；其她工具仍交给 Local ToolRegistry。"""
         if name == "read_document":
             return self.bridge.call_tool_sync(name, arguments)
         return self.local_tools.execute(name, arguments)
 
+    # 把 MCP 发现到的 read_document schema 嵌回现有三工具列表。
     def _build_schemas(self) -> list[dict[str, Any]]:
-        """把 MCP 发现到的 read_document schema 嵌回现有三工具列表。"""
         mcp_read = self.bridge.tool_schema("read_document")
         schemas: list[dict[str, Any]] = []
 

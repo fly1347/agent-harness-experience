@@ -31,6 +31,7 @@ class _FakeMessage:
         self.content = content
         self.tool_calls = None
 
+    # 把测试消息转成运行器消费的字典结构。
     def model_dump(self, exclude_none: bool = False) -> dict[str, str]:
         return {"role": self.role, "content": self.content}
 
@@ -41,6 +42,7 @@ class _FakeProvider:
     def __init__(self) -> None:
         self.requests: list[list[dict[str, object]]] = []
 
+    # 保存请求快照并返回固定回复，供测试检查模型实际收到的上下文。
     def complete(self, messages, tools=None):
         request_messages = deepcopy(messages)
         self.requests.append(request_messages)
@@ -76,6 +78,7 @@ class _FakeProvider:
 class _FakeTools:
     schemas: list[dict[str, object]] = []
 
+    # 意外收到工具调用时立即报错，暴露测试场景偏离。
     def execute(self, name, arguments):
         raise AssertionError("本测试不应调用工具。")
 
@@ -84,16 +87,18 @@ class _RecordingTracer:
     def __init__(self) -> None:
         self.records: list[dict[str, object]] = []
 
+    # 将测试事件保存到内存，供用例检查执行顺序和内容。
     def log(self, event, payload, console=None):
         self.records.append({"event": event, "payload": deepcopy(payload)})
 
+    # 返回空统计，避免测试替身写入真实运行报告。
     def finalize(self, **kwargs):
         return {}
 
 
 class MemoryManagerTests(unittest.TestCase):
+    # write 应新增一条 active 结构化记忆并返回其副本。
     def test_write_creates_active_memory(self) -> None:
-        """write 应新增一条 active 结构化记忆并返回其副本。"""
         memory = MemoryManager()
 
         created = memory.write(
@@ -108,8 +113,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(created.status, "active")
         self.assertEqual(len(memory.records), 1)
 
+    # retrieve_active 应只返回符合筛选条件的 active 记忆。
     def test_retrieve_active_filters_kind_and_key(self) -> None:
-        """retrieve_active 应只返回符合筛选条件的 active 记忆。"""
         memory = MemoryManager()
         memory.write(
             kind="decision",
@@ -128,8 +133,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual([item.key for item in by_kind], ["experiment_focus"])
         self.assertEqual([item.value for item in by_key], ["中文"])
 
+    # supersede 应保留旧版本，同时让新版本成为唯一 active 记录。
     def test_supersede_preserves_old_record_and_activates_new_value(self) -> None:
-        """supersede 应保留旧版本，同时让新版本成为唯一 active 记录。"""
         memory = MemoryManager()
         old = memory.write(
             kind="decision",
@@ -153,8 +158,8 @@ class MemoryManagerTests(unittest.TestCase):
             ["Context Management + 评估信度"],
         )
 
+    # 已有同 kind + key 的 active 记录时，write 不应静默覆盖。
     def test_write_rejects_silent_overwrite(self) -> None:
-        """已有同 kind + key 的 active 记录时，write 不应静默覆盖。"""
         memory = MemoryManager()
         memory.write(
             kind="fact",
@@ -169,8 +174,8 @@ class MemoryManagerTests(unittest.TestCase):
                 value="Step 7B",
             )
 
+    # 不同 MemoryManager 实例应各自维护独立的进程内状态。
     def test_manager_instances_have_independent_state(self) -> None:
-        """不同 MemoryManager 实例应各自维护独立的进程内状态。"""
         first = MemoryManager()
         second = MemoryManager()
         first.write(
@@ -182,8 +187,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(len(first.retrieve_active()), 1)
         self.assertEqual(second.retrieve_active(), [])
 
+    # 固定 Scenario 的“记住”指令应映射成 experiment_focus 结构化记忆。
     def test_explicit_write_instruction_creates_experiment_focus(self) -> None:
-        """固定 Scenario 的“记住”指令应映射成 experiment_focus 结构化记忆。"""
         memory = MemoryManager()
 
         change = memory.apply_explicit_instruction(
@@ -195,8 +200,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(change.record.key, "experiment_focus")
         self.assertEqual(change.record.value, "评估对象分层 + 指标边界")
 
+    # Memory 写入后的下一轮应出现读取、注入事件，并进入真实模型请求。
     def test_agent_loop_reads_and_injects_active_memory_next_turn(self) -> None:
-        """Memory 写入后的下一轮应出现读取、注入事件，并进入真实模型请求。"""
         provider = _FakeProvider()
         tracer = _RecordingTracer()
         memory = MemoryManager()
@@ -229,8 +234,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertIn("MEMORY_READ", events)
         self.assertIn("MEMORY_INJECT", events)
 
+    # 明确更新实验重点时应保留旧版本，并在 Trace 中记录 MEMORY_SUPERSEDE。
     def test_agent_loop_supersedes_memory_from_update_instruction(self) -> None:
-        """明确更新实验重点时应保留旧版本，并在 Trace 中记录 MEMORY_SUPERSEDE。"""
         provider = _FakeProvider()
         tracer = _RecordingTracer()
         memory = MemoryManager()
@@ -259,8 +264,8 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(memory.records[0].status, "superseded")
         self.assertIn("MEMORY_SUPERSEDE", events)
 
+    # 换成全新 Session 后，旧会话历史消失但 active memory 仍应进入模型请求。
     def test_active_memory_survives_fresh_session_without_old_history(self) -> None:
-        """换成全新 Session 后，旧会话历史消失但 active memory 仍应进入模型请求。"""
         provider = _FakeProvider()
         tracer = _RecordingTracer()
         memory = MemoryManager()
@@ -290,8 +295,8 @@ class MemoryManagerTests(unittest.TestCase):
         )
 
 
+    # SQLite 恢复出的记录应能重建独立 MemoryManager，并保留 active / superseded 状态。
     def test_memory_manager_rebuilds_from_persisted_records(self) -> None:
-        """SQLite 恢复出的记录应能重建独立 MemoryManager，并保留 active / superseded 状态。"""
         original = MemoryManager()
         original.write(
             kind="decision",
@@ -316,8 +321,8 @@ class MemoryManagerTests(unittest.TestCase):
             ["Context Management + 评估信度"],
         )
 
+    # 配置 SQLiteStore 后，AgentLoop 正常结束应自动保存本轮 Session 与 Memory。
     def test_agent_loop_persists_session_and_memory_to_sqlite(self) -> None:
-        """配置 SQLiteStore 后，AgentLoop 正常结束应自动保存本轮 Session 与 Memory。"""
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "harness.db"
             provider = _FakeProvider()

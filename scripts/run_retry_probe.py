@@ -39,8 +39,8 @@ class _FailOnceToolRegistry(ToolRegistry):
         super().__init__(*args, **kwargs)
         self._read_failures_remaining = 1
 
+    # 在 read_document 的第一次实际执行点注入瞬时错误。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """在 read_document 的第一次实际执行点注入瞬时错误。"""
         if name == "read_document" and self._read_failures_remaining:
             self._read_failures_remaining -= 1
             raise OSError("Step 10.1 injected transient read failure")
@@ -50,20 +50,20 @@ class _FailOnceToolRegistry(ToolRegistry):
 class _AlwaysFailToolRegistry(ToolRegistry):
     """让 read_document 持续失败，用于验证 retry exhausted 后终止。"""
 
+    # 除 read_document 外不改动原工具行为。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """除 read_document 外不改动原工具行为。"""
         if name == "read_document":
             raise OSError("Step 10.1 injected persistent read failure")
         return super().execute(name, arguments)
 
 
+# 返回当前实验项目根目录。
 def _project_root() -> Path:
-    """返回当前实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 生成 Step 10.1 单 case 的带时间戳 Trace 路径。
 def _trace_path(project_root: Path, case: str) -> Path:
-    """生成 Step 10.1 单 case 的带时间戳 Trace 路径。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
         project_root
@@ -73,16 +73,16 @@ def _trace_path(project_root: Path, case: str) -> Path:
     )
 
 
+# 按发生顺序提取事件名，便于校验 Harness retry 链。
 def _events(tracer: TraceLogger) -> list[str]:
-    """按发生顺序提取事件名，便于校验 Harness retry 链。"""
     return [record["event"] for record in tracer.records]
 
 
+# 第一次 read 失败、第二次成功；验证 Agent Loop 能继续到 Final Answer。
 def _run_success_case(
     project_root: Path,
     provider: OpenAICompatibleProvider,
 ) -> dict[str, Any]:
-    """第一次 read 失败、第二次成功；验证 Agent Loop 能继续到 Final Answer。"""
     tracer = TraceLogger(_trace_path(project_root, "success"))
     tools = _FailOnceToolRegistry(
         fixtures_dir=project_root / "fixtures",
@@ -123,11 +123,11 @@ def _run_success_case(
     }
 
 
+# read 始终失败；验证 max_retry=1 只允许第二次尝试，然后终止当前 Turn。
 def _run_exhausted_case(
     project_root: Path,
     provider: OpenAICompatibleProvider,
 ) -> dict[str, Any]:
-    """read 始终失败；验证 max_retry=1 只允许第二次尝试，然后终止当前 Turn。"""
     tracer = TraceLogger(_trace_path(project_root, "exhausted"))
     tools = _AlwaysFailToolRegistry(
         fixtures_dir=project_root / "fixtures",
@@ -172,8 +172,8 @@ def _run_exhausted_case(
     }
 
 
+# 写出 Step 10.1 的人工验收摘要，不复制大段模型请求。
 def _write_report(path: Path, cases: list[dict[str, Any]]) -> None:
-    """写出 Step 10.1 的人工验收摘要，不复制大段模型请求。"""
     passed = sum(1 for case in cases if case["passed"])
     lines = [
         "# Step 10.1 Tool Retry",
@@ -210,8 +210,8 @@ def _write_report(path: Path, cases: list[dict[str, Any]]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# 依次运行成功重试与预算耗尽两个真实 case，并输出总验收结果。
 def main() -> None:
-    """依次运行成功重试与预算耗尽两个真实 case，并输出总验收结果。"""
     project_root = _project_root()
     load_dotenv(project_root / ".env")
     provider = OpenAICompatibleProvider()

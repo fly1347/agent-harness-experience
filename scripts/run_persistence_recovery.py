@@ -49,22 +49,23 @@ class _NoTools:
 
     schemas: list[dict[str, Any]] = []
 
+    # 理论上不会被调用；若模型仍构造工具调用则立即暴露实验异常。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """理论上不会被调用；若模型仍构造工具调用则立即暴露实验异常。"""
         raise RuntimeError(f"Memory-only probe 不允许工具调用: {name}")
 
 
+# 返回当前实验项目根目录。
 def _project_root() -> Path:
-    """返回当前实验项目根目录。"""
     return Path(__file__).resolve().parents[1]
 
 
+# 按 turn_id 建立 Scenario 索引，供两个独立 worker 精确读取固定轮次。
 def _load_turns(path: Path) -> dict[str, dict[str, Any]]:
-    """按 turn_id 建立 Scenario 索引，供两个独立 worker 精确读取固定轮次。"""
     data = json.loads(path.read_text(encoding="utf-8"))
     return {turn["turn_id"]: turn for turn in data["turns"]}
 
 
+# 生成带阶段、Session、Turn 和微秒时间戳的独立 Trace 文件名。
 def _trace_path(
     project_root: Path,
     *,
@@ -72,7 +73,6 @@ def _trace_path(
     session_id: str,
     turn_id: str,
 ) -> Path:
-    """生成带阶段、Session、Turn 和微秒时间戳的独立 Trace 文件名。"""
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
         project_root
@@ -82,8 +82,8 @@ def _trace_path(
     )
 
 
+# 读取当前 Trace 中指定事件的 payload。
 def _event_payloads(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
-    """读取当前 Trace 中指定事件的 payload。"""
     return [
         record["payload"]
         for record in tracer.records
@@ -91,8 +91,8 @@ def _event_payloads(tracer: TraceLogger, event: str) -> list[dict[str, Any]]:
     ]
 
 
+# 创建两个 worker 共用配置口径的真实模型 Provider 与工具注册表。
 def _runtime_objects(project_root: Path) -> tuple[OpenAICompatibleProvider, ToolRegistry]:
-    """创建两个 worker 共用配置口径的真实模型 Provider 与工具注册表。"""
     load_dotenv(project_root / ".env")
     provider = OpenAICompatibleProvider()
     tools = ToolRegistry(
@@ -102,13 +102,13 @@ def _runtime_objects(project_root: Path) -> tuple[OpenAICompatibleProvider, Tool
     return provider, tools
 
 
+# 第一个 Python 进程：运行 T04～T08，并让 AgentLoop 自动把最终状态写入 SQLite。
 def _run_pre_restart(
     *,
     project_root: Path,
     db_path: Path,
     session_id: str,
 ) -> None:
-    """第一个 Python 进程：运行 T04～T08，并让 AgentLoop 自动把最终状态写入 SQLite。"""
     turns = _load_turns(project_root / "scenarios" / "multi_turn_context.json")
     provider, tools = _runtime_objects(project_root)
     session = Session(session_id=session_id)
@@ -166,6 +166,7 @@ def _run_pre_restart(
         print(f"active_memory: {active[0].value}")
 
 
+# 生成 Step 8 的简洁人工验收报告。
 def _write_recovery_report(
     path: Path,
     *,
@@ -182,7 +183,6 @@ def _write_recovery_report(
     memory_only_trace_path: Path,
     conflict_trace_path: Path,
 ) -> None:
-    """生成 Step 8 的简洁人工验收报告。"""
     passed = sum(1 for value in checks.values() if value)
     lines = [
         "# Step 8 Persistence / Recovery",
@@ -242,13 +242,13 @@ def _write_recovery_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# 第二个全新 Python 进程：只从 SQLite 恢复状态，然后运行 T09。
 def _run_post_restart(
     *,
     project_root: Path,
     db_path: Path,
     session_id: str,
 ) -> None:
-    """第二个全新 Python 进程：只从 SQLite 恢复状态，然后运行 T09。"""
     turns = _load_turns(project_root / "scenarios" / "multi_turn_context.json")
     provider, tools = _runtime_objects(project_root)
 
@@ -489,8 +489,8 @@ def _run_post_restart(
             raise RuntimeError(f"Step 8 recovery checks failed: {failed}")
 
 
+# 启动两个真正独立的 Python worker，让状态只能通过 SQLite 穿过重启边界。
 def _orchestrate(project_root: Path, db_path: Path) -> None:
-    """启动两个真正独立的 Python worker，让状态只能通过 SQLite 穿过重启边界。"""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if db_path.exists():
         db_path.unlink()
@@ -525,8 +525,8 @@ def _orchestrate(project_root: Path, db_path: Path) -> None:
     )
 
 
+# 按 phase 运行 Step 8 worker；默认 orchestrate 自动跨越真实进程边界。
 def main() -> None:
-    """按 phase 运行 Step 8 worker；默认 orchestrate 自动跨越真实进程边界。"""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--phase",

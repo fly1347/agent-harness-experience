@@ -25,6 +25,7 @@ class FakeMessage:
         self.content = content
         self.tool_calls = None
 
+    # 把测试消息转成运行器消费的字典结构。
     def model_dump(self, exclude_none: bool = False) -> dict[str, str]:
         return {
             "role": self.role,
@@ -38,6 +39,7 @@ class FakeProvider:
     def __init__(self) -> None:
         self.requests: list[list[dict[str, object]]] = []
 
+    # 保存请求快照并返回固定回复，供测试检查模型实际收到的上下文。
     def complete(self, messages, tools=None):
         request_messages = deepcopy(messages)
         self.requests.append(request_messages)
@@ -77,19 +79,23 @@ class FakeProvider:
 class FakeTools:
     schemas: list[dict[str, object]] = []
 
+    # 意外收到工具调用时立即报错，暴露测试场景偏离。
     def execute(self, name, arguments):
         raise AssertionError("No tool call expected in this test.")
 
 
 class FakeTracer:
+    # 忽略追踪输出，让本组用例只检查会话与上下文行为。
     def log(self, event, payload, console=None):
         return None
 
+    # 返回空统计，避免测试替身写入真实运行报告。
     def finalize(self, **kwargs):
         return {}
 
 
 class SessionTests(unittest.TestCase):
+    # 用可控 Provider 和空工具组装测试用 AgentLoop。
     def make_agent(self, provider: FakeProvider) -> AgentLoop:
         return AgentLoop(
             provider=provider,
@@ -97,6 +103,7 @@ class SessionTests(unittest.TestCase):
             tracer=FakeTracer(),
         )
 
+    # 连续运行同一会话，确认第二轮请求保留第一轮问答。
     def test_same_session_reuses_previous_turn_history(self) -> None:
         provider = FakeProvider()
         agent = self.make_agent(provider)
@@ -122,6 +129,7 @@ class SessionTests(unittest.TestCase):
             "second turn",
         )
 
+    # 新建会话后确认请求只包含新问题，不继承旧会话历史。
     def test_new_session_does_not_inherit_old_history(self) -> None:
         provider = FakeProvider()
         agent = self.make_agent(provider)
@@ -141,6 +149,7 @@ class SessionTests(unittest.TestCase):
             "fresh turn",
         )
 
+    # 修改一个会话的消息，确认另一实例的状态不受影响。
     def test_session_instances_have_independent_state(self) -> None:
         first = Session()
         second = Session()
@@ -166,6 +175,7 @@ class ContextBuilderTests(unittest.TestCase):
             {"role": "user", "content": "current question"},
         ]
 
+    # 确认 full_history 保留完整消息顺序和对应消息计数。
     def test_full_history_keeps_canonical_history(self) -> None:
         from mini_agent_harness.core.context import ContextBuilder
 
@@ -173,6 +183,7 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertEqual(built.messages, self.history)
         self.assertEqual(built.request_message_count, len(self.history))
 
+    # 确认窗口策略移除早期内容并保留当前问题。
     def test_last_n_drops_early_turns(self) -> None:
         from mini_agent_harness.core.context import ContextBuilder
 
@@ -181,6 +192,7 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertNotIn("early question", contents)
         self.assertIn("current question", contents)
 
+    # 超过摘要阈值后确认早期内容进入注入的系统摘要。
     def test_managed_context_injects_summary(self) -> None:
         from mini_agent_harness.core.context import ContextBuilder
 
@@ -194,8 +206,8 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertEqual(built.messages[1]["role"], "system")
         self.assertIn("Conversation summary", built.messages[1]["content"])
 
+    # 历史摘要与当前记忆冲突时，请求中应明确标出 Active Memory 的当前状态优先级。
     def test_managed_context_marks_active_memory_as_current_authority(self) -> None:
-        """历史摘要与当前记忆冲突时，请求中应明确标出 Active Memory 的当前状态优先级。"""
         from mini_agent_harness.core.context import ContextBuilder
 
         history = [
@@ -250,6 +262,7 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertIn("use this active memory as the current value", memory_message)
         self.assertIn("Context Management + 评估信度", memory_message)
 
+    # 确认模型请求可裁剪，而会话保存的完整历史不被删减。
     def test_agent_loop_uses_trimmed_context_without_trimming_session(self) -> None:
         from mini_agent_harness.core.context import ContextBuilder
 

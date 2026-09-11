@@ -25,6 +25,7 @@ class _FakeBridge:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
 
+    # 返回测试用 MCP 工具定义，未知工具名直接拒绝。
     def tool_schema(self, name: str):
         if name != "read_document":
             raise KeyError(name)
@@ -41,6 +42,7 @@ class _FakeBridge:
             },
         }
 
+    # 记录桥接调用并返回固定文档内容，不启动真实 MCP 服务。
     def call_tool_sync(self, name: str, arguments: dict[str, object]) -> str:
         self.calls.append((name, arguments))
         return "body returned through MCP"
@@ -67,6 +69,7 @@ class MCPToolRegistryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    # 确认模型看到的读取工具定义来自 MCP 发现结果。
     def test_read_document_schema_is_replaced_by_mcp_discovery(self) -> None:
         read_schema = next(
             item
@@ -78,6 +81,7 @@ class MCPToolRegistryTests(unittest.TestCase):
             "schema discovered from fake MCP server",
         )
 
+    # 确认读取请求及参数经 MCP 桥接执行，而非读取本地文件。
     def test_read_document_executes_through_mcp_bridge(self) -> None:
         result = self.registry.execute("read_document", {"name": "doc.md"})
         self.assertEqual(result, "body returned through MCP")
@@ -86,6 +90,7 @@ class MCPToolRegistryTests(unittest.TestCase):
             [("read_document", {"name": "doc.md"})],
         )
 
+    # 确认列文档仍走本地工具，不触发 MCP 桥接调用。
     def test_other_tools_stay_local(self) -> None:
         result = self.registry.execute("list_documents", {})
         self.assertIn("doc.md", result)

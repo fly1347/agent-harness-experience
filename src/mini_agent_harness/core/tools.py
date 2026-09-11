@@ -17,13 +17,14 @@ from typing import Any
 
 
 class ToolRegistry:
+    # 解析文档根目录和笔记文件的绝对路径，供本地工具执行时使用。
     def __init__(self, fixtures_dir: Path, notes_file: Path) -> None:
         self.fixtures_dir = fixtures_dir.resolve()
         self.notes_file = notes_file.resolve()
 
+    # 返回本实验提供给模型的三个原生 function calling 工具定义。
     @property
     def schemas(self) -> list[dict[str, Any]]:
-        """返回本实验提供给模型的三个原生 function calling 工具定义。"""
         return [
             {
                 "type": "function",
@@ -75,8 +76,8 @@ class ToolRegistry:
             },
         ]
 
+    # 按工具名执行 list/read/save 对应逻辑，并返回可写回模型上下文的字符串结果。
     def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """按工具名执行 list/read/save 对应逻辑，并返回可写回模型上下文的字符串结果。"""
         if name == "list_documents":
             docs = sorted(
                 p.name

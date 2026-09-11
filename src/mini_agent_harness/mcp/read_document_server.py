@@ -26,8 +26,8 @@ _FIXTURES_ENV = "MINI_AGENT_FIXTURES_DIR"
 mcp = MCPServer("mini-agent-harness-document-server")
 
 
+# 读取并校验 MCP Server 的 fixture 根目录配置。
 def _fixtures_dir() -> Path:
-    """读取并校验 MCP Server 的 fixture 根目录配置。"""
     raw = os.environ.get(_FIXTURES_ENV, "").strip()
     if not raw:
         raise RuntimeError(f"Missing environment variable: {_FIXTURES_ENV}")
@@ -38,6 +38,7 @@ def _fixtures_dir() -> Path:
     return path
 
 
+# 按文件名读取受限目录内的文档；下方英文 docstring 是 MCP 工具描述，需保留。
 @mcp.tool()
 def read_document(name: str) -> str:
     """Read one fixture document by exact filename."""
@@ -55,8 +56,8 @@ def read_document(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+# 以 stdio transport 启动最小 MCP Server，并阻塞等待 Client 请求。
 def main() -> None:
-    """以 stdio transport 启动最小 MCP Server，并阻塞等待 Client 请求。"""
     mcp.run()
 
 
